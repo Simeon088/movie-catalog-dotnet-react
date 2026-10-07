@@ -1,38 +1,78 @@
 import { useState, useEffect } from 'react';
 import { MovieCard } from './components/MovieCard';
+import { MovieForm } from './components/MovieForm';
 
 export default function App() {
-    const [movies, setMovies] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+  const [movies, setMovies] = useState([]);
+  const [actors, setActors] = useState([]);
+  const [editingMovie, setEditingMovie] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        // Заявка към ASP.NET Core Web API
-        fetch('http://localhost:5000/api/movies')
-            .then(res => {
-                if (!res.ok) throw new Error('Грешка при връзката с API');
-                return res.json();
-            })
-            .then(data => {
-                setMovies(data);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error(err);
-                setError('Не може да се заредят данните от бакенда.');
-                setLoading(false);
-            });
-    }, []);
+  const fetchMovies = () => {
+    fetch('http://localhost:5000/api/movies')
+      .then(res => res.json())
+      .then(data => setMovies(data));
+  };
 
-    return (
-        <div style={{ maxWidth: '800px', margin: '40px auto', padding: '0 20px', fontFamily: 'Arial, sans-serif' }}>
-            <h1>🎬 Каталог Филми и Актьори</h1>
-            {loading && <p>Зареждане на данните...</p>}
-            {error && <p style={{ color: 'red' }}>{error}</p>}
-            {!loading && !error && movies.map(movie => (
-                <MovieCard key={movie.id} movie={movie} />
-            ))}
-        </div>
-    );
+  const fetchActors = () => {
+    fetch('http://localhost:5000/api/movies/actors')
+      .then(res => res.json())
+      .then(data => setActors(data));
+  };
+
+  useEffect(() => {
+    Promise.all([fetchMovies(), fetchActors()]).then(() => setLoading(false));
+  }, []);
+
+  // CREATE / UPDATE
+  const handleSaveMovie = (movieData) => {
+    if (editingMovie) {
+      // PUT
+      fetch(`http://localhost:5000/api/movies/${editingMovie.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(movieData)
+      }).then(() => {
+        setEditingMovie(null);
+        fetchMovies();
+      });
+    } else {
+      // POST
+      fetch('http://localhost:5000/api/movies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(movieData)
+      }).then(() => fetchMovies());
+    }
+  };
+
+  // DELETE
+  const handleDeleteMovie = (id) => {
+    if (window.confirm('Сигурни ли сте, че искате да изтриете този филм?')) {
+      fetch(`http://localhost:5000/api/movies/${id}`, { method: 'DELETE' })
+        .then(() => fetchMovies());
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: '800px', margin: '40px auto', padding: '0 20px', fontFamily: 'Arial, sans-serif' }}>
+      <h1>🎬 Каталог Филми и Актьори </h1>
+      
+      <MovieForm
+        onSubmit={handleSaveMovie}
+        editingMovie={editingMovie}
+        onCancel={() => setEditingMovie(null)}
+        availableActors={actors}
+      />
+
+      {loading ? <p>Зареждане...</p> : movies.map(movie => (
+        <MovieCard
+          key={movie.id}
+          movie={movie}
+          onDelete={handleDeleteMovie}
+          onEdit={m => setEditingMovie(m)}
+        />
+      ))}
+    </div>
+  );
 }
-
